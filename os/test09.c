@@ -4,6 +4,7 @@
 
 int test09_1_main(int argc, char *argv[])
 {
+  kz_sleep(1);
   while(1) {
     puts("a");
   }

@@ -240,7 +240,7 @@ static int thread_sleep(int s)
     return -1;
 
   sleep_thread[i].thread = current;
-  sleep_thread[i].wakeup_time = s;
+  sleep_thread[i].wakeup_time = time + s;
 
   return 0;
 }
@@ -394,45 +394,55 @@ static void thread_intr(softvec_type_t type, unsigned long sp)
 
 /* 割り込み処理の入口関数 */
 static void timer_intr(softvec_type_t type, unsigned long sp) {
+  puts("timer_intr: current->cpu_time: ");
+  putxval(current->cpu_time, 3);
+  puts("\n");
+
   /* カレントスレッドのコンテキストを保存する */
   current->context.sp = sp;
-  // puts("timer_intr\n");
+  
+  /* タイマ継続処理 */
   timer8_clear_flag(0);
-  // if(!sleep_thread)
-  //   kz_sysdown();
-  current->cpu_time++;
-
-  if(++clock_time < TIMER_HZ) {
-    return;
-  }
+  
   /* 1秒ごとの処理 */
-  clock_time -= TIMER_HZ;
+  if(++clock_time >= TIMER_HZ) {
+    time++; /* 時刻を更新 */
 
-  getcurrent();
-  putcurrent();
+    clock_time -= TIMER_HZ;
 
-  schedule();
+    int i;
+    for(i = 0; i < THREAD_NUM; i++) {
+      if(sleep_thread[i].thread == NULL)
+        continue;
+      
+      if(sleep_thread[i].wakeup_time == time) {
+        kz_thread *tmp = current;
+        current = sleep_thread[i].thread;
+        putcurrent();
 
-  time++; /* 時刻を更新 */
+        current = tmp;
 
-  int i;
-  for(i = 0; i < THREAD_NUM; i++) {
-    if(sleep_thread[i].thread == NULL)
-      continue;
-    
-    if(sleep_thread[i].wakeup_time == time) {
-      current = sleep_thread[i].thread;
-      putcurrent();
-
-      sleep_thread[i].thread = NULL;
+        sleep_thread[i].thread = NULL;
+      }
     }
   }
 
-  // schedule();
+  // タイムスライス処理
+  current->cpu_time++;
+  if(current->cpu_time >= (uint8)(TIMER_HZ * (CPU_QUANTUM_MS / 1000))) {
 
-  // puts("dispatch\n");
-  dispatch(&current->context);
-  /* ここには返ってこない */
+    getcurrent();
+    putcurrent();
+
+    // print_readyque(3);
+
+    current->cpu_time = 0;
+
+    schedule();
+    puts("dispatch\n");
+    dispatch(&current->context);
+    /* ここには返ってこない */
+  }
 }
 
 void kz_start(kz_func_t func, char *name, int priority, int stacksize,
@@ -467,10 +477,9 @@ void kz_start(kz_func_t func, char *name, int priority, int stacksize,
 void kz_sysdown(void)
 {
   puts("system error!\n");
-  INTR_ENABLE;
-  while(1) {
-    asm volatile ("sleep");
-  }
+  timer8_stop(0);
+  while(1)
+    ;
 }
 
 /* システムコール呼び出し用ライブラリ関数 */
