@@ -3,7 +3,7 @@
 
 #include "defines.h"
 
-/* ¥·¥¹¥Æ¥à¡¦¥³¡¼¥ëÈÖ¹æ¤ÎÄêµÁ */
+/* ï¿½ï¿½ï¿½ï¿½ï¿½Æ¥à¡¦ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ö¹ï¿½ï¿½ï¿½ï¿½ï¿½ */
 typedef enum {
   KZ_SYSCALL_TYPE_RUN = 0,
   KZ_SYSCALL_TYPE_EXIT,
@@ -12,9 +12,11 @@ typedef enum {
   KZ_SYSCALL_TYPE_WAKEUP,
   KZ_SYSCALL_TYPE_GETID,
   KZ_SYSCALL_TYPE_CHPRI,
+  KZ_SYSCALL_TYPE_KMALLOC,
+  KZ_SYSCALL_TYPE_KMFREE,
 } kz_syscall_type_t;
 
-/* ¥·¥¹¥Æ¥à¡¦¥³¡¼¥ë¸Æ¤Ó½Ð¤·»þ¤Î¥Ñ¥é¥á¡¼¥¿³ÊÇ¼°è¤ÎÄêµÁ */
+/* ï¿½ï¿½ï¿½ï¿½ï¿½Æ¥à¡¦ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Æ¤Ó½Ð¤ï¿½ï¿½ï¿½ï¿½Î¥Ñ¥ï¿½á¡¼ï¿½ï¿½ï¿½ï¿½Ç¼ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ */
 typedef struct {
   union {
     struct {
@@ -47,6 +49,14 @@ typedef struct {
       int priority;
       int ret;
     } chpri;
+    struct {
+      int size;
+      void *ret;
+    } kmalloc;
+    struct {
+      char *p;
+      int ret;
+    } kmfree;
   } un;
 } kz_syscall_param_t;
 

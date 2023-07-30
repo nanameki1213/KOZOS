@@ -5,6 +5,7 @@
 #include "syscall.h"
 #include "lib.h"
 #include "timer.h"
+#include "memory.h"
 
 #define THREAD_NUM 6
 #define PRIORITY_NUM 16
@@ -260,6 +261,7 @@ static int thread_wakeup(kz_thread_id_t id)
 /* システムコールの処理(kz_getid():スレッドID取得) */
 static kz_thread_id_t thread_getid(void)
 {
+  puts("thread_getid\n");
   putcurrent();
   return (kz_thread_id_t)current;
 }
@@ -267,11 +269,29 @@ static kz_thread_id_t thread_getid(void)
 /* システムコールの処理(kz_chpri():スレッドの優先度変更) */
 static int thread_chpri(int priority)
 {
+  puts("thread_chpri\n");
   int old = current->priority;
   if(priority >= 0)
     current->priority = priority; /* 優先度変更 */
   putcurrent();
   return old;
+}
+
+/* システムコールの処理(kz_kmalloc():動的メモリ獲得) */
+static void *thread_kmalloc(int size)
+{
+  puts("thread_kmalloc\n");
+  putcurrent();
+  return kzmem_alloc(size);
+}
+
+/* システムコールの処理(kz_kmfree():メモリ解放) */
+static int thread_kmfree(char *p)
+{
+  puts("thread_kmfree\n");
+  kzmem_free(p);
+  putcurrent();
+  return 0;
 }
 
 /* 割込みハンドラの登録 */
@@ -319,6 +339,11 @@ static void call_functions(kz_syscall_type_t type, kz_syscall_param_t *p)
     case KZ_SYSCALL_TYPE_CHPRI:
       p->un.chpri.ret = thread_chpri(p->un.chpri.priority);
       break;
+    case KZ_SYSCALL_TYPE_KMALLOC:
+      p->un.kmalloc.ret = thread_kmfree(p->un.kmalloc.size);
+      break;
+    case KZ_SYSCALL_TYPE_KMFREE:
+      p->un.kmfree.ret = thread_kmfree(p->un.kmfree.p);
     default:
       break;
   }
@@ -449,6 +474,9 @@ void kz_start(kz_func_t func, char *name, int priority, int stacksize,
               int argc, char *argv[])
 {
   puts("kz_start\n");
+
+  kzmem_init(); /* 動的メモリの初期化 */
+
   current = NULL;
 
   memset(readyque, 0, sizeof(readyque));
