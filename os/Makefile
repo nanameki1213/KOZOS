@@ -17,8 +17,8 @@ OBJS  = startup.o main.o interrupt.o
 OBJS += lib.o serial.o
 
 # sources of kozos
-OBJS += kozos.o syscall.o test09.o
-OBJS += timer.o
+OBJS += kozos.o syscall.o thread_test.o
+OBJS += timer.o memory.o
 
 TARGET = kozos
 
