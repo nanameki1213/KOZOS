@@ -2,120 +2,136 @@
 #include "kozos.h"
 #include "lib.h"
 #include "memory.h"
+#include "interrupt.h"
 
-/**
- * メモリブロック構造体 
- * ( 獲得された領域は，先頭に以下の構造体を持っている )
-*/
+#define NALLOC 256
+
 typedef struct _kzmem_block {
   struct _kzmem_block *next;
   int size;
 } kzmem_block;
 
-/* メモリプール */
-typedef struct _kzmem_pool {
-  int size;
-  int num;
-  kzmem_block *free;
-} kzmem_pool;
+static kzmem_block *freep = NULL;
 
-/* メモリプールの定義( 個々のサイズと個数 ) */
-static kzmem_pool pool[] = {
-  {16, 8, NULL}, {32, 8, NULL}, {64, 4, NULL},
-};
+static char *area;
 
-#define MEMORY_AREA_NUM (sizeof(pool) / sizeof(*pool))
-
-/* メモリプールの初期化 */
-static int kzmem_init_pool(kzmem_pool *p)
-{
-  int i;
-  kzmem_block *mp;
-  kzmem_block **mpp;
-  extern char freearea; /* リンカスクリプトで定義される空き領域 */
-  static char *area = &freearea;
-
-  mp = (kzmem_block*)area;
-
-  /* 個々の領域をすべて解放済みリンクリストにつなぐ */
-  mpp = &p->free;
-  for(i = 0; i < p->num; i++) {
-    *mpp = mp;
-    memset(mp, 0, sizeof(*mp));
-    mp->size = p->size;
-    mpp = &(mp->next);
-    mp = (kzmem_block*)((char*)mp + p->size);
-    area += p->size;
-  }
-
-  return 0;
-}
-
-/* 動的メモリの初期化 */
-int kzmem_init(void)
-{
-  int i;
-  for(i = 0; i < MEMORY_AREA_NUM; i++) {
-    kzmem_init_pool(&pool[i]); /* 各メモリプールを初期化する */
-  }
-  return 0;
-}
 
 /**
- * @brief 動的メモリの獲得
+ * @brief ?????????????????????
  * 
- * @param size 獲得するメモリの大きさ
- * @return void* 獲得したメモリの先頭アドレス
+ * @param size ????????????????????????????
+ * @return void* ?????????????????????????????????????
  */
+void *kmalloc(int size)
+{
+  INTR_DISABLE;
+
+  int i;
+  kzmem_block *p, *prevp;
+  unsigned nunits;
+  extern char freearea;
+
+  nunits = (size + sizeof(kzmem_block));
+  if(freep == NULL) {
+    area = &freearea;
+    freep = (kzmem_block*)area;
+    freep->size = sizeof(kzmem_block);
+    freep->next = (kzmem_block*)area;
+  }
+  prevp = freep;
+  if(prevp != freep)
+    puts("why!?\n");
+  for(p = prevp->next; ; prevp = p, p = p->next) {
+    if(p->size >= nunits) {
+      if(p->size == nunits) {
+        prevp->next = p->next;
+      }
+      else {
+        p->size -= nunits;
+        p += p->size;
+        p->size = nunits;
+      }
+      freep = prevp;
+      INTR_ENABLE;
+      return (void*)(p + 1);
+    }
+    if(p == freep) {
+      puts("hello\n");
+      INTR_ENABLE;
+      if((p = kz_sbrk(nunits)) == NULL) {
+        kz_sysdown();
+      }
+      INTR_DISABLE;
+    }
+  }
+
+}
+
+void kfree(void *mem)
+{
+  INTR_DISABLE;
+  kzmem_block *bp, *p;
+
+  bp = (kzmem_block*)mem - 1;
+  for(p = freep; !(bp > p && bp < p->next); p = p->next) {
+    if(p >= p->next && (bp > p || bp < p->next))
+      break; /* �ΰ�λϤᤢ�뤤�Ͻ����β����֥��å� */
+  }
+
+  if(bp + bp->size == p->next) {
+    bp->size += p->next->size;
+    bp->next = p->next->next;
+  } else {
+    bp->next = p->next;
+  }
+  if(p + p->size == bp) {
+    p->size += bp->size;
+    p->next = bp->next;
+  } else {
+    p->next = bp;
+  }
+  freep = p;
+  INTR_ENABLE;
+}
+
 void *kzmem_alloc(int size)
 {
-  int i;
-  kzmem_block *mp;
-  kzmem_pool *p;
+  char *cp;
+  kzmem_block *up;
 
-  for(i = 0; i < MEMORY_AREA_NUM; i++) {
-    p = &pool[i];
-    if(size <= p->size - sizeof(kzmem_block)) {
-      if(p->free == NULL) { /* 解放済み領域が無い(メモリブロック不足) */
-        kz_sysdown();
-        return NULL;
-      }
-      /* 解放済みリンクリストから領域を取得する */
-      mp = p->free;
-      p->free = p->free->next;
-      mp->next = NULL;
+  cp = area;
+  up = (kzmem_block*)cp;
 
-      return mp + 1;
-    }
-  }
-
-  kz_sysdown();
-  return NULL;
+  if(size < NALLOC)
+    size = NALLOC;
+  area += size; // �������
+  up->size = size;
+  return (void*)(up + 1);
 }
 
 /**
- * @brief メモリの解放
+ * @brief ??????????????
  * 
- * @param mem kzmem_allocで獲得したヒープメモリの先頭ポインタ 
+ * @param mem kzmem_alloc?????????????????????????????????????????????? 
  */
-void kzmem_free(void *mem)
-{
-  int i;
-  kzmem_block *mp;
-  kzmem_pool *p;
+// void kzmem_free(void *mem)
+// {
+//   int i;
+//   kzmem_block *mp;
+//   kzmem_pool *p;
 
-  /* 領域の直前にあるはずのメモリブロック構造体を取得 */
-  mp = ((kzmem_block*)mem - 1);
+//   /* ????????????????????????????????????????????????????????????????? */
+//   mp = ((kzmem_block*)mem - 1);
 
-  for(i = 0; i < MEMORY_AREA_NUM; i++) {
-    p = &pool[i];
-    if(mp->size == p->size) {
-      /* 領域を解放済みリンクリストに戻す */
-      mp->next = p->free;
-      p->free = mp;
-      return;
-    }
-  }
+//   for(i = 0; i < MEMORY_AREA_NUM; i++) {
+//     p = &freep[i];
+//     if(mp->size == p->size) {
+//       /* ????????????????????????????????????????? */
+//       mp->next = p->free;
+//       p->free = mp;
+//       return;
+//     }
+//   }
 
-  kz_sysdown();
-}
+//   kz_sysdown();
+// }

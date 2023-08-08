@@ -1,11 +1,11 @@
 #include "defines.h"
 #include "kozos.h"
+#include "memory.h"
 #include "intr.h"
 #include "interrupt.h"
 #include "syscall.h"
 #include "lib.h"
 #include "timer.h"
-#include "memory.h"
 
 #define THREAD_NUM 6
 #define PRIORITY_NUM 16
@@ -277,21 +277,20 @@ static int thread_chpri(int priority)
   return old;
 }
 
-/* システムコールの処理(kz_kmalloc():動的メモリ獲得) */
-static void *thread_kmalloc(int size)
+// /* システムコールの処理(kz_kmalloc():動的メモリ獲得) */
+// static void *thread_kmalloc(int size)
+// {
+//   puts("thread_kmalloc\n");
+//   putcurrent();
+//   return kzmem_alloc(size);
+// }
+
+/* システムコールの処理(kz_ksbrk():動的メモリ獲得) */
+static void *thread_ksbrk(int size)
 {
-  puts("thread_kmalloc\n");
+  puts("thread_ksbrk\n");
   putcurrent();
   return kzmem_alloc(size);
-}
-
-/* システムコールの処理(kz_kmfree():メモリ解放) */
-static int thread_kmfree(char *p)
-{
-  puts("thread_kmfree\n");
-  kzmem_free(p);
-  putcurrent();
-  return 0;
 }
 
 /* 割込みハンドラの登録 */
@@ -339,11 +338,8 @@ static void call_functions(kz_syscall_type_t type, kz_syscall_param_t *p)
     case KZ_SYSCALL_TYPE_CHPRI:
       p->un.chpri.ret = thread_chpri(p->un.chpri.priority);
       break;
-    case KZ_SYSCALL_TYPE_KMALLOC:
-      p->un.kmalloc.ret = thread_kmfree(p->un.kmalloc.size);
-      break;
-    case KZ_SYSCALL_TYPE_KMFREE:
-      p->un.kmfree.ret = thread_kmfree(p->un.kmfree.p);
+    case KZ_SYSCALL_TYPE_KSBRK:
+      p->un.ksbrk.ret = thread_ksbrk(p->un.ksbrk.size);
     default:
       break;
   }
@@ -475,7 +471,6 @@ void kz_start(kz_func_t func, char *name, int priority, int stacksize,
 {
   puts("kz_start\n");
 
-  kzmem_init(); /* 動的メモリの初期化 */
 
   current = NULL;
 
@@ -490,10 +485,12 @@ void kz_start(kz_func_t func, char *name, int priority, int stacksize,
   softvec_setintr(SOFTVEC_TYPE_TIMINTR, timer_intr);
   timer8_hz(0);
   
-  // softvec_setintr(SOFTVEC_TYPE_TIMINTR, timer_intr);
+  /* システムコール発行不可なので直接関数を呼び出して動的メモリ獲得 */
+  thread_ksbrk(INIT_MEMORY_SIZE);
 
   /* システムコール発行不可なので直接関数を呼び出してスレッドを作成する */
   current = (kz_thread*)thread_run(func, name, priority, stacksize, argc, argv);
+
 
   /* 最初のスレッドを起動 */
   puts("dispatch\n");

@@ -5,6 +5,7 @@
 #include "syscall.h"
 
 #define CPU_TIME 1
+#define INIT_MEMORY_SIZE 0x40
 
 /* �����ƥࡦ������ */
 kz_thread_id_t kz_run(kz_func_t func, char *name, int priority, int stacksize,
@@ -17,6 +18,7 @@ kz_thread_id_t kz_getid(void);
 int kz_chpri(int priority);
 void *kz_kmalloc(int size);
 int kz_kmkfree(void *p);
+void *kz_sbrk(int size);
 
 /* �饤�֥��ؿ� */
 void kz_start(kz_func_t func, char *name, int priority, int stacksize,

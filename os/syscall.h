@@ -12,8 +12,7 @@ typedef enum {
   KZ_SYSCALL_TYPE_WAKEUP,
   KZ_SYSCALL_TYPE_GETID,
   KZ_SYSCALL_TYPE_CHPRI,
-  KZ_SYSCALL_TYPE_KMALLOC,
-  KZ_SYSCALL_TYPE_KMFREE,
+  KZ_SYSCALL_TYPE_KSBRK,
 } kz_syscall_type_t;
 
 /* �����ƥࡦ������ƤӽФ����Υѥ�᡼����Ǽ������ */
@@ -52,11 +51,7 @@ typedef struct {
     struct {
       int size;
       void *ret;
-    } kmalloc;
-    struct {
-      char *p;
-      int ret;
-    } kmfree;
+    } ksbrk;
   } un;
 } kz_syscall_param_t;
 

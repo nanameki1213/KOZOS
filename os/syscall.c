@@ -69,18 +69,10 @@ int kz_chpri(int priority)
   return param.un.chpri.ret;
 }
 
-void *kz_kmalloc(int size)
+void *kz_sbrk(int size)
 {
   kz_syscall_param_t param;
-  param.un.kmalloc.size = size;
-  kz_syscall(KZ_SYSCALL_TYPE_KMALLOC, &param);
-  return param.un.kmalloc.ret;
-}
-
-int kz_kmfree(void *p)
-{
-  kz_syscall_param_t param;
-  param.un.kmfree.p = p;
-  kz_syscall(KZ_SYSCALL_TYPE_KMFREE, &param);
-  return param.un.kmfree.ret;
+  param.un.ksbrk.size = size;
+  kz_syscall(KZ_SYSCALL_TYPE_KSBRK, &param);
+  return param.un.ksbrk.ret;
 }
